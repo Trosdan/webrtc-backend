@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+    crossorigin="anonymous"></script>
+</head>
+
+<body>
+  <div class="container-fluid vh-100 align-items-center justify-content-center">
+    <div class="card">
+      <div id="login-card" class="card-body">
+        <form id="login-form">
+          <h1>Chat with Socket</h1>
+          <div class="d-flex">
+            <div class="d-flex flex-fill flex-column me-3">
+              <label for="userName" class="form-label">Nome do usuario</label>
+              <input type="text" class="form-control" id="userName" />
+            </div>
+            <div class="align-self-end">
+              <button type="submit" class="btn btn-primary">Entrar</button>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div id="chat-card" hidden class="card-body">
+        <h1>Chat with Socket</h1>
+        <div class="mb-3">
+          <ul class="nav nav-tabs" id="tabChat">
+            <li class="nav-item">
+              <a class="nav-link" href="#" id="plus-tab" data-bs-toggle="tab" data-bs-target="#plus">+</a>
+            </li>
+          </ul>
+          <div class="card">
+            <div class="card-body mh-100" style="overflow-y: scroll; height: 100%;">
+              <div class="tab-content" id="tabContentChat">
+                <div class="tab-pane fade" id="plus">
+                  <form id="room-form">
+                    <div class="d-flex">
+                      <div class="d-flex flex-fill flex-column me-3">
+                        <label for="roomName" class="form-label">Criar sala</label>
+                        <input type="text" class="form-control" id="roomName" />
+                      </div>
+                      <div class="align-self-end">
+                        <button type="submit" class="btn btn-primary">Criar</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <form id="message-form">
+          <div class="d-flex">
+            <div class="d-flex flex-fill flex-column me-3">
+              <input type="text" class="form-control" aria-label="input" id="message" placeholder="Escrever mensagem" />
+            </div>
+            <div class="align-self-end">
+              <button type="submit" class="btn btn-primary">Enviar</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+
+<script>
+  let websocket;
+  let userName = '';
+
+  let roomSelected = '';
+  let rooms = [];
+  let messages = {};
+
+  let loginForm = document.getElementById("login-form");
+  let roomForm = document.getElementById("room-form");
+  let messageForm = document.getElementById("message-form");
+
+  function connectWebSockets() {
+    websocket = new WebSocket("ws://localhost:8080/");
+
+    websocket.onmessage = (event) => {
+      const dataEvent = event.data;
+      const data = JSON.parse(dataEvent);
+      switch (data.type) {
+        case "message": {
+          createMessage(data.room, data.name, data.message)
+          break;
+        }
+        case "connected": {
+          document.getElementById("login-card").hidden = true;
+          document.getElementById("chat-card").hidden = false;
+          break;
+        }
+        case "connectedFail": {
+          alert("Não foi possivel entrar com esse usuario.");
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  }
+
+  function connect() {
+    userName = document.getElementById("userName").value;
+
+    websocket.send(JSON.stringify({
+      type: "connect",
+      data: { userName },
+    }))
+  }
+
+  function connectRoom() {
+    roomName = document.getElementById("roomName").value;
+
+    websocket.send(JSON.stringify({
+      type: "connectRoom",
+      data: { userName, roomName },
+    }))
+
+    createRoom(roomName);
+
+    // var triggerEl = document.querySelector(`#tabChat a[data-bs-target="#${roomName}"]`)
+    // bootstrap.Tab.getInstance(triggerEl).show();
+  }
+
+  function sendMessage() {
+    const message = document.getElementById("message").value;
+    document.getElementById("message").value = "";
+    websocket.send(JSON.stringify({
+      type: "sendMessage",
+      data: {
+        userName,
+        roomName,
+        message,
+      }
+    }))
+  }
+
+  function createMessage(room, name, message) {
+    const chatbox = document.getElementById(room);
+    const textElement = document.createElement('p');
+    textElement.innerHTML = `<p>${name}: ${message}</p>`;
+    chatbox.appendChild(textElement);
+  }
+
+  function createRoom(room) {
+    const tabChat = document.getElementById("tabChat");
+    const tabContentChat = document.getElementById("tabContentChat");
+
+    const contentElement = document.createElement('div');
+    contentElement.className = "tab-pane fade";
+    contentElement.id = room;
+
+    tabContentChat.appendChild(contentElement);
+
+    const tabElement = document.createElement('li');
+    tabElement.className = "nav-item"
+    tabElement.setAttribute("onclick", `changeRoom("${room}")`)
+    tabElement.innerHTML = `
+      <a class="nav-link" href="#" id="${room}-tab" data-bs-toggle="tab" data-bs-target="#${room}">${room}</a>
+    `;
+    tabChat.prepend(tabElement);
+  }
+
+  function changeRoom(room) {
+    roomName = room;
+    console.log({ roomName });
+  }
+
+  connectWebSockets();
+
+  loginForm.addEventListener('submit', event => {
+    event.preventDefault();
+    connect();
+  })
+
+  roomForm.addEventListener('submit', event => {
+    event.preventDefault();
+    connectRoom();
+  })
+
+  messageForm.addEventListener('submit', event => {
+    event.preventDefault();
+    sendMessage();
+  })
+
+  var triggerTabList = [].slice.call(document.querySelectorAll('#tabChat a'))
+  triggerTabList.forEach(function (triggerEl) {
+    var tabTrigger = new bootstrap.Tab(triggerEl)
+
+    triggerEl.addEventListener('click', function (event) {
+      event.preventDefault()
+      tabTrigger.show()
+    })
+  })
+
+  var triggerFirstTabEl = document.querySelector('#tabChat li:last-child a')
+  bootstrap.Tab.getInstance(triggerFirstTabEl).show()
+</script>
+
+</html>
